@@ -58,11 +58,11 @@ object ReInvent2014Converter {
           sessInfo.abstract1 = getDivField("abstract", spans)
           sessInfo.speakers = getDivField("speakers", smalls)
           
-          var queryString = "AWS re:Invent 2014 | " + shortHumanId
+          var queryString = "AWS " + shortHumanId
           var youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
           if (youtubeUrl == null) {
             // repeat session instead
-            queryString = "AWS re:Invent 2014 | " + shortHumanId + "R"
+            queryString = "AWS " + shortHumanId + "R"
             youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
           }
       
@@ -80,13 +80,15 @@ object ReInvent2014Converter {
     query.setFullTextQuery(queryString)
     val videoFeed = service.query(query, classOf[VideoFeed])
     log.debug("query to youtube = " + queryString)
+    log.debug("short humanId = " + shortHumanId)
   
     var youtubeUrl = ""
     val vfEntriesLen = videoFeed.getEntries.size() - 1;
     for (ii <- 0 to vfEntriesLen) {
-      val video = videoFeed.getEntries.get(0)
+      val video = videoFeed.getEntries.get(ii)
       // TODO:  Ensure that common attributes of publisher, etc are correct
       val videoTitle = video.getTitle().getPlainText()
+      log.debug("videoTitle = " + videoTitle)
       if (videoTitle.contains(shortHumanId)) {
         val videoId = video.getId().substring(video.getId().lastIndexOf(':') + 1)
         val videoDateTime = new DateTime(video.getPublished().getValue())
