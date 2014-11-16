@@ -1,0 +1,25 @@
+<table>
+{{#infosAsJava}}
+ <tr>
+  <td>
+    <b>{{session}} - {{title}}</b><br>
+    by {{speakers}}
+  </td>
+  <td align="right" width="90">
+{{#slideshareUrl}}
+    <a href="{{slideshareUrl}}" imageanchor="1"><img border="0" height="34" width="34" src="https://lh3.googleusercontent.com/-8tZrYHZEF1k/Up3UN24fSVI/AAAAAAAAVVQ/VGODHwz2yyg/s34-no/slideshare.png" /></a>
+{{/slideshareUrl}}
+{{^slideshareUrl}}
+{{/slideshareUrl}}
+{{#youtubeUrl}}
+    <a href="{{youtubeUrl}}" imageanchor="1"><img border="0" height="32" width="50" src="https://lh4.googleusercontent.com/-RqHI2jPZGAA/Up3UNzvSGcI/AAAAAAAAVVU/PXFZQL-Wo00/w50-h32-no/youtube.jpg" /></a>
+{{/youtubeUrl}}
+{{^youtubeUrl}}
+{{/youtubeUrl}}
+  </td>
+ </tr>
+ <tr>
+  <td colspan=2 style="padding-left:20px; padding-bottom:10px; font-size:x-small;">{{abstract1}}</td>
+ </tr>
+{{/infosAsJava}}
+</table>
