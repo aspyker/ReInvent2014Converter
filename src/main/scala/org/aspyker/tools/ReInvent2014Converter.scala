@@ -52,7 +52,7 @@ object ReInvent2014Converter {
         val spans = div \\ "span"
         val smalls = div \\ "small"
         val shortHumanId = getDivField("abbreviation", spans).split(" +")(0)
-        if (!shortHumanId.endsWith("-R")) {
+        if (!shortHumanId.contains("-R")) {
           sessInfo.session = shortHumanId
           sessInfo.title = getDivField("title", spans)
           sessInfo.abstract1 = getDivField("abstract", spans)
@@ -60,7 +60,7 @@ object ReInvent2014Converter {
           
           var queryString = "AWS re:Invent 2014 | " + shortHumanId
           var youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
-          if (youtubeUrl != null) {
+          if (youtubeUrl == null) {
             // repeat session instead
             queryString = "AWS re:Invent 2014 | " + shortHumanId + "R"
             youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
@@ -108,6 +108,7 @@ object ReInvent2014Converter {
     val fileNames = config.getStringList("converter.files").asScala
     for (file <- fileNames) {
       val filename = "src/main/resources/" + file + ".html"
+      log.debug("processing " + file + " sessions");
       val infos = getSessionInfos(log, filename, shows, config, newerThanDate)
       log.debug("infos = " + infos)
       allInfos.infos = allInfos.infos ::: infos
