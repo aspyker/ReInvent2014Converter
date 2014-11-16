@@ -10,14 +10,35 @@ import com.github.mustachejava._
 import java.io.PrintWriter
 import com.google.gdata.client.youtube.{YouTubeQuery, YouTubeService}
 import com.google.gdata.data.youtube.{VideoEntry, VideoFeed}
-import java.net.URL;
+import java.net.URL
+import com.benfante.jslideshare.{SlideShareAPI, SlideShareAPIFactory}
+import com.benfante.jslideshare.messages.{Slideshow, User}
 
 object ReInvent2014Converter {
   val log = Logger.getLogger(this.getClass)
   val config = ConfigFactory.load()
 
-  def getAmazonSlides(log:Logger, config:Config) : Array[Slideshow] = {
-    return new Array[Slideshow](0)
+  def getAmazonSlides(log:Logger, config:Config) : List[Slideshow] = {
+    val ssapi = SlideShareAPIFactory.getSlideShareAPI(
+      config.getString("slideshare.apikey"),
+      config.getString("slideshare.sharedsecret")
+    );
+  
+    var shows = List[Slideshow]();
+    var page = 0
+    var break = false
+    while (!break) {
+      var start = page * 100
+      val awsUser = ssapi.getSlideshowByUser("AmazonWebServices", start, 100)
+      val returned = awsUser.getSlideshows().size()
+      shows = shows ::: (awsUser.getSlideshows().asScala.toList)
+      if (returned < 100) {
+        break = true
+      }
+      page = page + 1
+    }
+    log.debug("AmazonWebServices number of slide shares = " + shows.length)
+    return shows
   }
   
   def getDivField(classType:String, spans:NodeSeq) : String = {
@@ -30,7 +51,7 @@ object ReInvent2014Converter {
     return ""
   }
   
-  def getSessionInfos(log:Logger, filename:String, slideShares:Array[Slideshow], config:Config, newerThanDate:DateTime) : List[SessionInfo] = {
+  def getSessionInfos(log:Logger, filename:String, slideShares:List[Slideshow], config:Config, newerThanDate:DateTime) : List[SessionInfo] = {
     var infos = List[SessionInfo]()
     
     val xml = XML.withSAXParser(new org.ccil.cowan.tagsoup.jaxp.SAXFactoryImpl().newSAXParser())
@@ -65,15 +86,28 @@ object ReInvent2014Converter {
             queryString = "AWS " + shortHumanId + "R"
             youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
           }
-      
           log.debug("youtube url = " + youtubeUrl)
           sessInfo.youtubeUrl = youtubeUrl
+          
+          val slideshareUrl = getSlideshareUrl(log, slideShares, newerThanDate, shortHumanId)
+          log.debug("slideshare url = " + slideshareUrl)
+          sessInfo.slideshareUrl = slideshareUrl
           
           infos ::= sessInfo
         }
       }
     }
     return infos
+  }
+  
+  def getSlideshareUrl(log:Logger, slideShares:List[Slideshow], newerThanDate:DateTime, shortHumanId:String) : String = {
+    var slide = slideShares.find { slideShare =>
+      (slideShare.getTitle().contains(shortHumanId)) &&
+      (slideShare.getCreatedDate().isAfter(newerThanDate)) }
+    if (!slide.isDefined) {
+      return "";
+    }
+    return slide.get.getPermalink()
   }
   
   def getYouTubeUrl(log:Logger, shortHumanId:String, queryString:String, query:YouTubeQuery, service:YouTubeService, newerThanDate:DateTime) : String = {
@@ -104,14 +138,13 @@ object ReInvent2014Converter {
 
   def main(args:Array[String]) = {
     val newerThanDate = new DateTime().minusDays(config.getInt("converter.daysAgo"))
-    val shows = getAmazonSlides(log, config)
-    log.debug("shows = " + shows)
+    val slides = getAmazonSlides(log, config)
     var allInfos = new SessionInfoList()
     val fileNames = config.getStringList("converter.files").asScala
     for (file <- fileNames) {
       val filename = "src/main/resources/" + file + ".html"
       log.debug("processing " + file + " sessions");
-      val infos = getSessionInfos(log, filename, shows, config, newerThanDate)
+      val infos = getSessionInfos(log, filename, slides, config, newerThanDate)
       log.debug("infos = " + infos)
       allInfos.infos = allInfos.infos ::: infos
     }
