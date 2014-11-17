@@ -22,9 +22,9 @@ object ReInvent2014Converter {
     val ssapi = SlideShareAPIFactory.getSlideShareAPI(
       config.getString("slideshare.apikey"),
       config.getString("slideshare.sharedsecret")
-    );
+    )
   
-    var shows = List[Slideshow]();
+    var shows = List[Slideshow]()
     var page = 0
     var break = false
     while (!break) {
@@ -51,6 +51,13 @@ object ReInvent2014Converter {
     return ""
   }
   
+  def replaceEntities(raw:String) : String = {
+    var fixed = raw.replaceAll("\\p{Pd}", "-");
+    fixed = fixed.replaceAll("\u2019", "'");
+    //fixed.map(c => "%s\t\\u%04X".format(c, c.toInt)).foreach(println)
+    return fixed
+  }
+  
   def getSessionInfos(log:Logger, filename:String, slideShares:List[Slideshow], config:Config, newerThanDate:DateTime) : List[SessionInfo] = {
     var infos = List[SessionInfo]()
     
@@ -66,7 +73,7 @@ object ReInvent2014Converter {
     for (div <- divs) {
       val id = (div \ "@id").text
       if (id.startsWith("session_")) {
-        val pureId = id.substring(8);
+        val pureId = id.substring(8)
         log.debug("processing session " + pureId)
         val sessInfo = new SessionInfo()
         
@@ -75,9 +82,9 @@ object ReInvent2014Converter {
         val shortHumanId = getDivField("abbreviation", spans).split(" +")(0)
         if (!shortHumanId.contains("-R")) {
           sessInfo.session = shortHumanId
-          sessInfo.title = getDivField("title", spans)
-          sessInfo.abstract1 = getDivField("abstract", spans)
-          sessInfo.speakers = getDivField("speakers", smalls)
+          sessInfo.title = replaceEntities(getDivField("title", spans))
+          sessInfo.abstract1 = replaceEntities(getDivField("abstract", spans))
+          sessInfo.speakers = replaceEntities(getDivField("speakers", smalls))
           
           var queryString = "AWS " + shortHumanId
           var youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
@@ -105,7 +112,7 @@ object ReInvent2014Converter {
       (slideShare.getTitle().contains(shortHumanId)) &&
       (slideShare.getCreatedDate().isAfter(newerThanDate)) }
     if (!slide.isDefined) {
-      return "";
+      return ""
     }
     return slide.get.getPermalink()
   }
@@ -117,7 +124,7 @@ object ReInvent2014Converter {
     log.debug("short humanId = " + shortHumanId)
   
     var youtubeUrl = ""
-    val vfEntriesLen = videoFeed.getEntries.size() - 1;
+    val vfEntriesLen = videoFeed.getEntries.size() - 1
     for (ii <- 0 to vfEntriesLen) {
       val video = videoFeed.getEntries.get(ii)
       // TODO:  Ensure that common attributes of publisher, etc are correct
@@ -139,11 +146,12 @@ object ReInvent2014Converter {
   def main(args:Array[String]) = {
     val newerThanDate = new DateTime().minusDays(config.getInt("converter.daysAgo"))
     val slides = getAmazonSlides(log, config)
+    //val slides = List[Slideshow]()
     var allInfos = new SessionInfoList()
     val fileNames = config.getStringList("converter.files").asScala
     for (file <- fileNames) {
       val filename = "src/main/resources/" + file + ".html"
-      log.debug("processing " + file + " sessions");
+      log.debug("processing " + file + " sessions")
       val infos = getSessionInfos(log, filename, slides, config, newerThanDate)
       log.debug("infos = " + infos)
       allInfos.infos = allInfos.infos ::: infos
