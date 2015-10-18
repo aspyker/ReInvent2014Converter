@@ -1,5 +1,6 @@
 package org.aspyker.tools
 
+import com.google.api.services.youtube.model.{SearchResult, SearchListResponse}
 import org.apache.log4j.Logger
 import org.joda.time.DateTime
 import com.typesafe.config._
@@ -8,11 +9,14 @@ import scala.xml._
 import scala.collection.JavaConverters._
 import com.github.mustachejava._
 import java.io.PrintWriter
-import com.google.gdata.client.youtube.{YouTubeQuery, YouTubeService}
-import com.google.gdata.data.youtube.{VideoEntry, VideoFeed}
-import java.net.URL
-import com.benfante.jslideshare.{SlideShareAPI, SlideShareAPIFactory}
-import com.benfante.jslideshare.messages.{Slideshow, User}
+import com.google.api.services.youtube.YouTube
+import com.google.api.client.http.javanet.NetHttpTransport
+import com.google.api.client.json.jackson2.JacksonFactory
+import com.benfante.jslideshare.SlideShareAPIFactory
+import com.benfante.jslideshare.messages.Slideshow
+
+// TODO: I'm much better at Scala than I was a year ago.
+// TODO: Need to update the mess of first time Scale code below
 
 object ReInvent2014Converter {
   val log = Logger.getLogger(this.getClass)
@@ -21,18 +25,22 @@ object ReInvent2014Converter {
   def getAmazonSlides(log:Logger, config:Config) : List[Slideshow] = {
     val ssapi = SlideShareAPIFactory.getSlideShareAPI(
       config.getString("slideshare.apikey"),
-      config.getString("slideshare.sharedsecret")
+      config.getString("slideshare.sharedsecret"),
+      0
     )
   
     var shows = List[Slideshow]()
     var page = 0
     var break = false
+    var pageSize = 250
+    // TODO: How to avoid break here?
     while (!break) {
-      var start = page * 100
-      val awsUser = ssapi.getSlideshowByUser("AmazonWebServices", start, 100)
+      var start = page * pageSize
+      val awsUser = ssapi.getSlideshowByUser("AmazonWebServices", start, pageSize)
       val returned = awsUser.getSlideshows().size()
+      log.debug(s"another $returned slides")
       shows = shows ::: (awsUser.getSlideshows().asScala.toList)
-      if (returned < 100) {
+      if (returned < pageSize) {
         break = true
       }
       page = page + 1
@@ -64,11 +72,15 @@ object ReInvent2014Converter {
     val xml = XML.withSAXParser(new org.ccil.cowan.tagsoup.jaxp.SAXFactoryImpl().newSAXParser())
     val root = XML.load(filename)
 
-    val service = new YouTubeService(config.getString("converter.youtube.client.id"))
-    val query = new YouTubeQuery(new URL("http://gdata.youtube.com/feeds/api/videos"))
-    query.setOrderBy(YouTubeQuery.OrderBy.RELEVANCE)
-    query.setSafeSearch(YouTubeQuery.SafeSearch.NONE)
-    
+    val youtube: YouTube = new YouTube.Builder(new NetHttpTransport(), new JacksonFactory(), null)
+      .setApplicationName(config.getString("converter.youtube.client.id"))
+      .build()
+
+    val searchReqList: YouTube#Search#List = youtube.search().list("id, snippet")
+    searchReqList.setOrder("relevance")
+    searchReqList.setSafeSearch("none")
+    searchReqList.setKey(config.getString("youtube.apiKey"))
+
     val divs = root \\ "div"
     for (div <- divs) {
       val id = (div \ "@id").text
@@ -83,15 +95,14 @@ object ReInvent2014Converter {
         if (!shortHumanId.contains("-R")) {
           sessInfo.session = shortHumanId
           sessInfo.title = replaceEntities(getDivField("title", spans))
-          sessInfo.abstract1 = replaceEntities(getDivField("abstract", spans))
-          sessInfo.speakers = replaceEntities(getDivField("speakers", smalls))
-          
+          sessInfo.abstract1 = replaceEntities(getDivField("abstract truncatedTxt", spans))
+
           var queryString = "AWS " + shortHumanId
-          var youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
+          var youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, searchReqList, youtube, newerThanDate)
           if (youtubeUrl == null) {
             // repeat session instead
             queryString = "AWS " + shortHumanId + "R"
-            youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, query, service, newerThanDate)
+            youtubeUrl = getYouTubeUrl(log, shortHumanId, queryString, searchReqList, youtube, newerThanDate)
           }
           log.debug("youtube url = " + youtubeUrl)
           sessInfo.youtubeUrl = youtubeUrl
@@ -117,22 +128,21 @@ object ReInvent2014Converter {
     return slide.get.getPermalink()
   }
   
-  def getYouTubeUrl(log:Logger, shortHumanId:String, queryString:String, query:YouTubeQuery, service:YouTubeService, newerThanDate:DateTime) : String = {
-    query.setFullTextQuery(queryString)
-    val videoFeed = service.query(query, classOf[VideoFeed])
+  def getYouTubeUrl(log:Logger, shortHumanId:String, queryString:String, searchReq:YouTube#Search#List, youtube:YouTube, newerThanDate:DateTime) : String = {
+    searchReq.setQ(queryString)
     log.debug("query to youtube = " + queryString)
     log.debug("short humanId = " + shortHumanId)
-  
+    val resp: SearchListResponse = searchReq.execute()
+
     var youtubeUrl = ""
-    val vfEntriesLen = videoFeed.getEntries.size() - 1
-    for (ii <- 0 to vfEntriesLen) {
-      val video = videoFeed.getEntries.get(ii)
+
+    for (video: SearchResult <- resp.getItems.asScala) {
       // TODO:  Ensure that common attributes of publisher, etc are correct
-      val videoTitle = video.getTitle().getPlainText()
+      val videoTitle = video.getSnippet.getTitle
       log.debug("videoTitle = " + videoTitle)
       if (videoTitle.contains(shortHumanId)) {
-        val videoId = video.getId().substring(video.getId().lastIndexOf(':') + 1)
-        val videoDateTime = new DateTime(video.getPublished().getValue())
+        val videoId = video.getId.getVideoId.substring(video.getId.getVideoId.lastIndexOf(':') + 1)
+        val videoDateTime = new DateTime(video.getSnippet.getPublishedAt.getValue)
         if (videoDateTime.isAfter(newerThanDate)) {
           youtubeUrl = "http://www.youtube.com/watch?v=" + videoId
           log.debug("youtubeUrl = " + youtubeUrl)
@@ -143,10 +153,9 @@ object ReInvent2014Converter {
     return youtubeUrl
   }
 
-  def main(args:Array[String]) = {
+  def main(args:Array[String]): Unit = {
     val newerThanDate = new DateTime().minusDays(config.getInt("converter.daysAgo"))
     val slides = getAmazonSlides(log, config)
-    //val slides = List[Slideshow]()
     var allInfos = new SessionInfoList()
     val fileNames = config.getStringList("converter.files").asScala
     for (file <- fileNames) {

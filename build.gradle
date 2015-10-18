@@ -1,32 +1,25 @@
 apply plugin: 'scala'
-apply plugin: 'eclipse'
-
-buildscript {
-    repositories {
-		mavenCentral()
-	}
-}
 
 repositories {
     mavenCentral()
 }
 
 dependencies {
-    compile 'org.scala-lang:scala-library:2.11.4'
+    compile 'org.scala-lang:scala-library:2.11.7'
     compile 'org.scala-lang.modules:scala-xml_2.11:1.0.2'
     compile 'com.typesafe:config:1.2.1'
     compile 'org.ccil.cowan.tagsoup:tagsoup:1.2.1'
     compile 'org.codehaus.groovy:groovy-all:2.2.1'
-	compile 'com.google.gdata:core:1.47.1'
-	compile 'commons-httpclient:commons-httpclient:3.1'
-	compile 'log4j:log4j:1.2.14'
-	compile 'joda-time:joda-time:2.3'
-	compile 'com.github.spullara.mustache.java:compiler:0.8.13'
+    compile 'com.google.apis:google-api-services-youtube:v3-rev150-1.20.0'
+    compile 'commons-httpclient:commons-httpclient:3.1'
+    compile 'log4j:log4j:1.2.14'
+    compile 'joda-time:joda-time:2.3'
+    compile 'com.github.spullara.mustache.java:compiler:0.8.13'
 }
 
 apply plugin: 'application'
 mainClassName = 'org.aspyker.tools.ReInvent2014Converter'
 
 run {
-    args = ['src/main/resources/ARC.html']
+//    jvmArgs = ['-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005']
 }
